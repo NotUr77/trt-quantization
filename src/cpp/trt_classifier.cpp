@@ -30,8 +30,26 @@ void Classifier::setup(void const* data, size_t size) {
     m_runtime     = shared_ptr<IRuntime>(createInferRuntime(*m_logger), destroy_trt_ptr<IRuntime>);
     m_engine      = shared_ptr<ICudaEngine>(m_runtime->deserializeCudaEngine(data, size), destroy_trt_ptr<ICudaEngine>);
     m_context     = shared_ptr<IExecutionContext>(m_engine->createExecutionContext(), destroy_trt_ptr<IExecutionContext>);
-    m_inputDims   = m_context->getBindingDimensions(0);
-    m_outputDims  = m_context->getBindingDimensions(1);
+
+    int const nIO = m_engine->getNbIOTensors();
+    std::vector<const char *> tensorNameList(nIO);
+    for (int i = 0; i < nIO; ++i)
+    {
+        tensorNameList[i] = m_engine->getIOTensorName(i);
+    }
+
+    for (auto const name : tensorNameList)
+    {
+        TensorIOMode mode = m_engine->getTensorIOMode(name);
+        if(mode == TensorIOMode::kINPUT){
+            m_inputDims   = m_engine->getTensorShape(name);
+        }else{
+            m_outputDims  = m_engine->getTensorShape(name);
+        }
+    }
+
+    // m_inputDims   = m_context->getBindingDimensions(0);
+    // m_outputDims  = m_context->getBindingDimensions(1);
     // 考虑到大多数classification model都是1 input, 1 output, 这边这么写。如果像BEVFusion这种有多输出的需要修改
 
     CUDA_CHECK(cudaStreamCreate(&m_stream));
@@ -46,9 +64,19 @@ void Classifier::setup(void const* data, size_t size) {
     CUDA_CHECK(cudaMalloc(&m_inputMemory[1], m_inputSize));
     CUDA_CHECK(cudaMalloc(&m_outputMemory[1], m_outputSize));
 
+    for (auto const name : tensorNameList)
+    {
+        TensorIOMode mode = m_engine->getTensorIOMode(name);
+        if(mode == TensorIOMode::kINPUT){
+            m_context->setTensorAddress(name, &m_inputMemory[1]);
+        }else{
+            m_context->setTensorAddress(name, &m_outputMemory[1]);
+        }
+    }
+
     // //创建m_bindings，之后再寻址就直接从这里找
-    m_bindings[0] = m_inputMemory[1];
-    m_bindings[1] = m_outputMemory[1];
+    // m_bindings[0] = m_inputMemory[1];
+    // m_bindings[1] = m_outputMemory[1];
 }
 
 void Classifier::reset_task(){}

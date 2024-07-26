@@ -70,6 +70,8 @@ struct Params {
     task_type            task     = CLASSIFICATION;
     int                  ws_size  = WORKSPACESIZE;
     precision            prec     = FP32;
+    std::string calibrationTablePath = "";
+    std::string calibrationDataPath = "";
 };
 
 
@@ -79,7 +81,7 @@ void destroy_trt_ptr(T* ptr){
     if (ptr) {
         std::string type_name = typeid(T).name();
         LOGD("Destroy %s", type_name.c_str());
-        ptr->destroy(); 
+        // ptr->destroy(); 
     };
 }
 
